@@ -79,10 +79,10 @@ export const Scope = ({ onExit }: ScopeProps) => {
       />
 
       {/* Scope */}
-      <div
+      <AnimatedDiv
         style={{
           position: "fixed",
-          transform: `translateY(${recoilSpring.y.get()}px)`,
+          transform: recoilSpring.y.to((y) => `translateY(${y}px)`),
           left: position.x - scopeSize / 2,
           top: position.y - scopeSize / 2,
           width: scopeSize,
@@ -106,7 +106,7 @@ export const Scope = ({ onExit }: ScopeProps) => {
           <div className="absolute left-[10%] top-1/2 w-[6px] h-[60px] bg-black transform -translate-y-1/2" />
           <div className="absolute right-[10%] top-1/2 w-[6px] h-[60px] bg-black transform -translate-y-1/2" />
         </div>
-      </div>
+      </AnimatedDiv>
     </>
   );
 };
