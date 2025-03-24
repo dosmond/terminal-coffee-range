@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useSpring, animated } from "@react-spring/web";
 
-export const Scope = () => {
+interface ScopeProps {
+  onExit?: () => void;
+}
+
+export const Scope = ({ onExit }: ScopeProps) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const scopeSize = 600; // Scope size in pixels
   const [isRecoiling, setIsRecoiling] = useState(false);
@@ -26,18 +30,26 @@ export const Scope = () => {
       setTimeout(() => setIsRecoiling(false), 150);
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && onExit) {
+        onExit();
+      }
+    };
+
     // Hide cursor when component mounts
     document.body.style.cursor = "none";
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("click", handleShoot);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       // Restore cursor when component unmounts
       document.body.style.cursor = "auto";
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("click", handleShoot);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [onExit]);
 
   const AnimatedDiv = animated.div;
 
@@ -62,19 +74,21 @@ export const Scope = () => {
               }px, transparent 100%, black 100%)`
           ),
           pointerEvents: "none",
+          zIndex: 40,
         }}
       />
 
       {/* Scope */}
-      <AnimatedDiv
+      <div
         style={{
           position: "fixed",
-          transform: recoilSpring.y.to((y) => `translateY(${y}px)`),
+          transform: `translateY(${recoilSpring.y.get()}px)`,
           left: position.x - scopeSize / 2,
           top: position.y - scopeSize / 2,
           width: scopeSize,
           height: scopeSize,
           pointerEvents: "none",
+          zIndex: 40,
         }}
       >
         <div className="relative w-full h-full">
@@ -92,7 +106,7 @@ export const Scope = () => {
           <div className="absolute left-[10%] top-1/2 w-[6px] h-[60px] bg-black transform -translate-y-1/2" />
           <div className="absolute right-[10%] top-1/2 w-[6px] h-[60px] bg-black transform -translate-y-1/2" />
         </div>
-      </AnimatedDiv>
+      </div>
     </>
   );
 };

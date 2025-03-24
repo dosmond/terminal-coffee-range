@@ -2,11 +2,22 @@
 
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { ShootingRange } from "./ShootingRange";
 import { Scope } from "./Scope";
+import { WelcomeMenu } from "./WelcomeMenu";
 
 export const GameScene = () => {
+  const [gameStarted, setGameStarted] = useState(false);
+
+  const handleStartGame = () => {
+    setGameStarted(true);
+  };
+
+  const handleExitGame = () => {
+    setGameStarted(false);
+  };
+
   return (
     <div className="w-full h-screen relative">
       <Canvas shadows>
@@ -22,6 +33,7 @@ export const GameScene = () => {
           />
           <ShootingRange />
           <OrbitControls
+            enabled={!gameStarted}
             enablePan={false}
             enableZoom={false}
             maxPolarAngle={Math.PI / 2}
@@ -29,7 +41,12 @@ export const GameScene = () => {
           />
         </Suspense>
       </Canvas>
-      <Scope />
+
+      {gameStarted ? (
+        <Scope onExit={handleExitGame} />
+      ) : (
+        <WelcomeMenu onStart={handleStartGame} />
+      )}
     </div>
   );
 };
