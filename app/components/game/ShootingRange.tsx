@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { Html } from "@react-three/drei";
+import { Html, Sky, Cloud } from "@react-three/drei";
 import { MenuItem } from "@/app/lib/gameState";
 import { CoffeeMug } from "./CoffeeMug";
 
@@ -138,6 +138,20 @@ export const ShootingRange = () => {
 
   return (
     <group ref={sceneRef}>
+      {/* Sky */}
+      <Sky
+        distance={4500000}
+        sunPosition={[1, 0, 0]}
+        inclination={0.6}
+        azimuth={0.1}
+        rayleigh={0.5}
+      />
+
+      {/* Clouds */}
+      <Cloud position={[-20, 40, -100]} speed={0.2} opacity={0.8} />
+      <Cloud position={[20, 30, -100]} speed={0.2} opacity={0.6} />
+      <Cloud position={[0, 35, -80]} speed={0.2} opacity={0.7} />
+
       {/* Debug overlay */}
       {debug && (
         <Html position={[0, 5, 0]}>
@@ -191,24 +205,18 @@ export const ShootingRange = () => {
         </div>
       </Html>
 
-      {/* Ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
+      {/* Ground - grass field */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
         <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#1F2937" />
-      </mesh>
-
-      {/* Background elements */}
-      <mesh position={[0, 5, -15]} receiveShadow>
-        <boxGeometry args={[30, 20, 1]} />
-        <meshStandardMaterial color="#374151" />
+        <meshStandardMaterial color="#2d5c27" />
       </mesh>
 
       {/* Coffee mugs */}
-      <group position={[0, 0, -10]}>
+      <group position={[0, 2, -10]}>
         {menuItems.map((item, index) => (
           <CoffeeMug
             key={item.id}
-            position={[(index - (menuItems.length - 1) / 2) * 3, 2, 0]}
+            position={[(index - (menuItems.length - 1) / 2) * 3, 0, 0]}
             menuItem={item}
           />
         ))}

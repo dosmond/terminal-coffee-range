@@ -1,10 +1,14 @@
 "use client";
 
+import {
+  CameraShake,
+  OrbitControls,
+  PerspectiveCamera,
+} from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Suspense, useState } from "react";
-import { ShootingRange } from "./ShootingRange";
 import { Scope } from "./Scope";
+import { ShootingRange } from "./ShootingRange";
 import { WelcomeMenu } from "./WelcomeMenu";
 
 export const GameScene = () => {
@@ -32,10 +36,21 @@ export const GameScene = () => {
             shadow-mapSize-height={2048}
           />
           <ShootingRange />
+          {/* <Environment
+            files="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/lilienstein_2k.hdr"
+            ground={{ height: 4, radius: 50, scale: 20 }}
+          /> */}
+          <CameraShake
+            maxYaw={0.01}
+            maxPitch={0.01}
+            maxRoll={0.01}
+            yawFrequency={0.5}
+            pitchFrequency={0.5}
+            rollFrequency={0.4}
+          />
           <OrbitControls
-            enabled={!gameStarted}
             enablePan={false}
-            enableZoom={false}
+            enableZoom={true}
             maxPolarAngle={Math.PI / 2}
             minPolarAngle={Math.PI / 3}
           />

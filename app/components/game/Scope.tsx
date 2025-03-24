@@ -51,12 +51,14 @@ export const Scope = ({ onExit }: ScopeProps) => {
     };
   }, [onExit]);
 
-  const AnimatedDiv = animated.div;
+  // Create styled animated divs to avoid TypeScript errors
+  const AnimatedMask = animated("div");
+  const AnimatedScope = animated("div");
 
   return (
     <>
       {/* Dark overlay with circular cutout */}
-      <AnimatedDiv
+      <AnimatedMask
         style={{
           position: "fixed",
           inset: 0,
@@ -79,7 +81,7 @@ export const Scope = ({ onExit }: ScopeProps) => {
       />
 
       {/* Scope */}
-      <AnimatedDiv
+      <AnimatedScope
         style={{
           position: "fixed",
           transform: recoilSpring.y.to((y) => `translateY(${y}px)`),
@@ -106,7 +108,7 @@ export const Scope = ({ onExit }: ScopeProps) => {
           <div className="absolute left-[10%] top-1/2 w-[6px] h-[60px] bg-black transform -translate-y-1/2" />
           <div className="absolute right-[10%] top-1/2 w-[6px] h-[60px] bg-black transform -translate-y-1/2" />
         </div>
-      </AnimatedDiv>
+      </AnimatedScope>
     </>
   );
 };
