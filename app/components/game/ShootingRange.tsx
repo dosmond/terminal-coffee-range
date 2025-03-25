@@ -178,13 +178,18 @@ interface ShootingRangeProps {
   setLastAdded: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
+const quantityOptions: MenuItem[] = [
+  { id: "back", name: "Go Back", price: 0 },
+  { id: "quantity_-1", name: "Remove 1", price: 0 },
+  { id: "quantity_1", name: "Add 1", price: 0 },
+];
+
 export const ShootingRange = ({
   cart,
   setCart,
   lastAdded,
   setLastAdded,
 }: ShootingRangeProps) => {
-  // Game mode state: 'products' for showing all coffees, 'variants' for showing variants of selected coffee, 'quantity' for quantity selection
   const [gameMode, setGameMode] = useState<
     "products" | "variants" | "quantity"
   >("products");
@@ -193,12 +198,6 @@ export const ShootingRange = ({
   > | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<MenuItem | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  // Quantity options for the quantity selection step
-  const [quantityOptions, setQuantityOptions] = useState<MenuItem[]>([
-    { id: "back", name: "Go Back", price: 0 },
-    { id: "quantity_-1", name: "Remove 1", price: 0 },
-    { id: "quantity_1", name: "Add 1", price: 0 },
-  ]);
 
   const [showControls, setShowControls] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -525,8 +524,13 @@ export const ShootingRange = ({
     const baseSpacing = 3;
 
     // Adjust spacing based on number of items
-    const spacing =
-      totalItems > 5 ? Math.min(baseSpacing, 20 / totalItems) : baseSpacing;
+    const spacing = Math.min(baseSpacing, 20 / totalItems);
+
+    if (gameMode === "quantity") {
+      if (index === 0) return [0, 0, 0]; // Back button
+      if (index === 1) return [-4, 0, 0]; // Remove 1
+      if (index === 2) return [1, 0, 0]; // Add 1
+    }
 
     // Calculate x position
     const x = (index - (totalItems - 1) / 2) * spacing;
@@ -574,6 +578,8 @@ export const ShootingRange = ({
       delete (window as any).setShootingPaused;
     };
   }, []);
+
+  console.log(menuItems);
 
   return (
     <group ref={sceneRef}>
