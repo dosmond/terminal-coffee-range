@@ -28,23 +28,23 @@ export default function Home() {
   const [lastAdded, setLastAdded] = useState<string | null>(null);
 
   return (
-    <main className="min-h-screen">
-      {/* Cart display completely outside the 3D scene */}
-      <CartDisplay
-        cart={cart}
-        setCart={setCart}
-        lastAdded={lastAdded}
-        setLastAdded={setLastAdded}
-      />
+    <ApiProvider api={api}>
+      <main className="min-h-screen">
+        {/* Cart display completely outside the 3D scene */}
+        <CartDisplay
+          cart={cart}
+          setCart={setCart}
+          lastAdded={lastAdded}
+          setLastAdded={setLastAdded}
+        />
 
-      <ApiProvider api={api}>
         <GameScene
           cart={cart}
           setCart={setCart}
           lastAdded={lastAdded}
           setLastAdded={setLastAdded}
         />
-      </ApiProvider>
-    </main>
+      </main>
+    </ApiProvider>
   );
 }

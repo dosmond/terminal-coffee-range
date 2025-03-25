@@ -193,17 +193,27 @@ export const ShootingRange = ({
   lastAdded,
   setLastAdded,
 }: ShootingRangeProps) => {
-  // Game mode state: 'products' for showing all coffees, 'variants' for showing variants of selected coffee
-  const [gameMode, setGameMode] = useState<"products" | "variants">("products");
+  // Game mode state: 'products' for showing all coffees, 'variants' for showing variants of selected coffee, 'quantity' for quantity selection
+  const [gameMode, setGameMode] = useState<
+    "products" | "variants" | "quantity"
+  >("products");
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<MenuItem | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(
     PLACEHOLDER_MENU_ITEMS
   );
+  // Quantity options for the quantity selection step
+  const [quantityOptions, setQuantityOptions] = useState<MenuItem[]>([
+    { id: "back", name: "Go Back", price: 0 },
+    { id: "quantity_1", name: "Add 1", price: 0 },
+    { id: "quantity_-1", name: "Remove 1", price: 0 },
+  ]);
   const [lastHit, setLastHit] = useState<string | null>(null);
   const [shotsFired, setShotsFired] = useState(0);
   const [score, setScore] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isCartActive, setIsCartActive] = useState(false);
 
   const mousePosition = useRef(new THREE.Vector2());
   const raycaster = useRef(new THREE.Raycaster());
@@ -244,21 +254,28 @@ export const ShootingRange = ({
   useEffect(() => {
     if (gameMode === "variants" && selectedProduct) {
       // Map variants to menu items
-      const variantItems: MenuItem[] = selectedProduct.variants.map(
-        (variant: any) => ({
+      const variantItems: MenuItem[] = [
+        { id: "back", name: "Go Back", price: 0 },
+        ...selectedProduct.variants.map((variant: any) => ({
           id: variant.id,
           name: variant.name,
           price: variant.price / 100, // Convert cents to dollars
-        })
-      );
+        })),
+      ];
 
       setMenuItems(variantItems);
+    } else if (gameMode === "quantity" && selectedVariant) {
+      // Set the quantity options
+      setMenuItems(quantityOptions);
     }
-  }, [gameMode, selectedProduct]);
+  }, [gameMode, selectedProduct, selectedVariant, quantityOptions]);
 
   // Handle window clicks for shooting
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
+      // Skip shooting functionality if cart is active
+      if (isCartActive) return;
+
       setShotsFired((prev) => prev + 1);
 
       // Play gunshot sound
@@ -305,9 +322,19 @@ export const ShootingRange = ({
                     setGameMode("variants");
                     setLastHit(`Selected: ${hitProduct.name}`);
                   }
-                } else {
+                } else if (gameMode === "variants") {
                   // In variant mode - register a hit on a variant
                   const hitVariant = menuItems[mugIndex];
+
+                  // Check if the "Go Back" option was selected
+                  if (hitVariant.id === "back") {
+                    // Go back to product selection
+                    setGameMode("products");
+                    setSelectedProduct(null);
+                    setLastHit("Cancelled selection");
+                    return;
+                  }
+
                   setLastHit(
                     `Hit: ${selectedProduct?.name} - ${
                       hitVariant.name
@@ -315,41 +342,130 @@ export const ShootingRange = ({
                   );
                   setScore((prev) => prev + Math.round(hitVariant.price * 100));
 
-                  // Add to cart
+                  // Store selected variant
+                  setSelectedVariant(hitVariant);
+
+                  // Check if the selected product is a subscription product
+                  const isSubscription =
+                    selectedProduct?.subscription === "required" ||
+                    selectedProduct?.subscription === "allowed";
+
+                  if (isSubscription) {
+                    // For subscription products, skip quantity selection and add directly to cart
+                    const subscriptionItem: CartItem = {
+                      id: hitVariant.id,
+                      productName: selectedProduct?.name || "",
+                      variantName: hitVariant.name,
+                      price: hitVariant.price,
+                      quantity: 1,
+                      isSubscription: true,
+                    };
+
+                    // Check if this subscription is already in the cart
+                    const existingSubscriptionIndex = cart.findIndex(
+                      (item) => item.id === hitVariant.id && item.isSubscription
+                    );
+
+                    if (existingSubscriptionIndex >= 0) {
+                      // If already exists, no change (subscriptions can only have quantity 1)
+                      setLastAdded(
+                        `Subscription already added: ${selectedProduct?.name} - ${hitVariant.name}`
+                      );
+                    } else {
+                      // Add new subscription to cart
+                      setCart((prevCart) => [...prevCart, subscriptionItem]);
+                      setLastAdded(
+                        `Added subscription: ${selectedProduct?.name} - ${hitVariant.name}`
+                      );
+                    }
+
+                    // Return to product selection after adding subscription
+                    setGameMode("products");
+                    setSelectedProduct(null);
+                    setSelectedVariant(null);
+
+                    // Trigger the mug shot event
+                    window.dispatchEvent(
+                      new CustomEvent("mug-shot", {
+                        detail: { id: menuItemId },
+                      })
+                    );
+                  } else {
+                    // For regular products, proceed to quantity selection
+                    setGameMode("quantity");
+                  }
+                } else if (gameMode === "quantity") {
+                  // In quantity mode - handle quantity selection
+                  const hitOption = menuItems[mugIndex];
+
+                  // Check if the "Go Back" option was selected
+                  if (hitOption.id === "back") {
+                    // Go back to variant selection
+                    setGameMode("variants");
+                    setSelectedVariant(null);
+                    setLastHit("Back to variants");
+                    return;
+                  }
+
+                  // Extract quantity value from the option ID
+                  const quantityChange = hitOption.id === "quantity_1" ? 1 : -1;
+
+                  if (!selectedVariant) return;
+
+                  // Add to cart with the selected quantity
                   const newItem: CartItem = {
-                    id: hitVariant.id,
+                    id: selectedVariant.id,
                     productName: selectedProduct?.name || "",
-                    variantName: hitVariant.name,
-                    price: hitVariant.price,
+                    variantName: selectedVariant.name,
+                    price: selectedVariant.price,
                     quantity: 1,
+                    isSubscription: false,
                   };
 
                   // Update cart with the new item
                   setCart((prevCart: CartItem[]) => {
                     // Check if this variant is already in the cart
                     const existingItemIndex = prevCart.findIndex(
-                      (item: CartItem) => item.id === hitVariant.id
+                      (item: CartItem) =>
+                        item.id === selectedVariant.id && !item.isSubscription
                     );
 
                     if (existingItemIndex >= 0) {
-                      // Increment quantity of existing item
+                      // Update quantity of existing item
                       const updatedCart = [...prevCart];
-                      updatedCart[existingItemIndex].quantity += 1;
+                      const newQuantity =
+                        updatedCart[existingItemIndex].quantity +
+                        quantityChange;
+
+                      // Don't allow quantity to go below 0
+                      if (newQuantity <= 0) {
+                        // Remove the item if quantity would be 0 or less
+                        return prevCart.filter(
+                          (_, index) => index !== existingItemIndex
+                        );
+                      }
+
+                      updatedCart[existingItemIndex].quantity = newQuantity;
                       return updatedCart;
                     } else {
-                      // Add new item to cart
-                      return [...prevCart, newItem];
+                      // Only add new item if we're adding (not removing)
+                      if (quantityChange > 0) {
+                        return [...prevCart, newItem];
+                      }
+                      return prevCart;
                     }
                   });
 
-                  // Set last added item with product and variant name
-                  setLastAdded(`${selectedProduct?.name} - ${hitVariant.name}`);
+                  // Set last added item with quantity information
+                  const actionText = quantityChange > 0 ? "Added" : "Removed";
+                  setLastAdded(
+                    `${actionText} ${Math.abs(quantityChange)}x ${
+                      selectedProduct?.name
+                    } - ${selectedVariant.name}`
+                  );
 
-                  // Reset to product selection mode
-                  setTimeout(() => {
-                    setGameMode("products");
-                    setSelectedProduct(null);
-                  }, 1500);
+                  // Stay on the quantity selection screen instead of going back to the product selection
+                  // Don't reset the selected product or variant
 
                   // Trigger the mug shot event
                   window.dispatchEvent(
@@ -379,7 +495,22 @@ export const ShootingRange = ({
 
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
-  }, [camera, menuItems, playGunshot, gameMode, selectedProduct, coffeeList]);
+  }, [
+    camera,
+    menuItems,
+    playGunshot,
+    gameMode,
+    selectedProduct,
+    selectedVariant,
+    coffeeList,
+    setCart,
+    setLastAdded,
+    quantityOptions,
+    mousePosition,
+    raycaster,
+    cart,
+    isCartActive,
+  ]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -464,43 +595,68 @@ export const ShootingRange = ({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  // Pass setIsCartActive to the parent component's scope
+  useEffect(() => {
+    // Make setIsCartActive available on the window object for the CartDisplay component
+    (window as any).setShootingPaused = (isPaused: boolean) => {
+      setIsCartActive(isPaused);
+    };
+
+    return () => {
+      // Clean up
+      delete (window as any).setShootingPaused;
+    };
+  }, []);
+
   return (
     <group ref={sceneRef}>
       {skyAndClouds}
 
-      {/* Mouse Helper Animation - only show on desktop */}
-      {showControls && menuItems.length > 5 && !isMobile && <MouseHelper />}
+      {/* Mouse Helper Animation - only show on desktop when cart is not active */}
+      {showControls && menuItems.length > 5 && !isMobile && !isCartActive && (
+        <MouseHelper />
+      )}
 
-      {/* Game mode indicator */}
-      <Html position={[0, 10, -10]}>
-        <div
-          style={{
-            color: "white",
-            backgroundColor:
-              gameMode === "variants"
-                ? "rgba(39, 99, 195, 0.7)"
-                : "rgba(0, 0, 0, 0.5)",
-            padding: "10px",
-            borderRadius: "10px",
-            textAlign: "center",
-            fontWeight: "bold",
-            fontSize: "20px",
-            width: "300px",
-            transform: "translateX(-50%)",
-          }}
-        >
-          {gameMode === "products"
-            ? "SHOOT TO SELECT A COFFEE"
-            : `${selectedProduct?.name}: CHOOSE A VARIANT`}
-          {menuItems.length > 5 && (
-            <div style={{ fontSize: "16px", marginTop: "5px" }}>
-              {isMobile
-                ? "Use two fingers to pan and see more options"
-                : "Right-click and drag to see more options"}
-            </div>
-          )}
-        </div>
-      </Html>
+      {/* Game mode indicator - only show when cart is not active */}
+      {!isCartActive && (
+        <Html position={[0, 10, -10]}>
+          <div
+            style={{
+              color: "white",
+              backgroundColor:
+                gameMode === "variants"
+                  ? "rgba(39, 99, 195, 0.7)"
+                  : gameMode === "quantity"
+                  ? "rgba(76, 175, 80, 0.7)"
+                  : "rgba(0, 0, 0, 0.5)",
+              padding: "10px",
+              borderRadius: "10px",
+              textAlign: "center",
+              fontWeight: "bold",
+              fontSize: "20px",
+              width: "300px",
+              transform: "translateX(-50%)",
+            }}
+          >
+            {gameMode === "products"
+              ? "SHOOT TO SELECT A COFFEE"
+              : gameMode === "variants"
+              ? `${selectedProduct?.name}${
+                  selectedProduct?.subscription === "required"
+                    ? " (SUBSCRIPTION)"
+                    : ""
+                }: CHOOSE A VARIANT`
+              : `${selectedProduct?.name} - ${selectedVariant?.name}: CHOOSE QUANTITY`}
+            {menuItems.length > 5 && (
+              <div style={{ fontSize: "16px", marginTop: "5px" }}>
+                {isMobile
+                  ? "Use two fingers to pan and see more options"
+                  : "Right-click and drag to see more options"}
+              </div>
+            )}
+          </div>
+        </Html>
+      )}
 
       {/* Ground - only visible when not using webcam */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>

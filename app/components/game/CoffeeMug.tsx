@@ -32,17 +32,6 @@ export const CoffeeMug = ({
     config: { duration: 150 }, // Fast fade out
   });
 
-  // Floating animation for variant mugs
-  const { mugPosition } = useSpring({
-    mugPosition: [
-      originalPosition[0],
-      originalPosition[1] +
-        (isVariant ? Math.sin(Date.now() * 0.001) * 0.1 : 0), // Small hover effect for variants
-      originalPosition[2],
-    ],
-    config: { tension: 100, friction: 10 },
-  });
-
   const handleShot = (e: ThreeEvent<MouseEvent> | MouseEvent) => {
     // If it's a ThreeEvent, stop propagation
     if ("stopPropagation" in e) {
@@ -71,14 +60,16 @@ export const CoffeeMug = ({
       // Keep position stable for regular mugs
       mugRef.current.position.y = originalPosition[1];
     } else if (mugRef.current && !isBreaking && isVariant) {
-      // Add a subtle floating effect for variant mugs
-      mugRef.current.position.y =
-        originalPosition[1] + Math.sin(state.clock.elapsedTime * 2) * 0.05;
     }
   });
 
   // Choose colors based on whether it's a variant or not
-  const bodyColor = isVariant
+  const isBackOption = menuItem.id === "back";
+  const bodyColor = isBackOption
+    ? hovered
+      ? "#991B1B" // Darker red on hover
+      : "#EF4444" // Red for back button
+    : isVariant
     ? hovered
       ? "#D97706"
       : "#F59E0B" // Amber for variants
@@ -109,7 +100,7 @@ export const CoffeeMug = ({
 
   return (
     <>
-      {showParticles && (
+      {showParticles && !isBackOption && (
         <MugParticles
           position={originalPosition}
           onComplete={() => {
@@ -131,12 +122,14 @@ export const CoffeeMug = ({
         </Html>
 
         {/* Stand - always visible */}
-        <group position={[0, -1, 0]}>
+        <group position={[0, -1.8, 5]}>
           {/* Top of stand */}
           <mesh position={[0, -0.15, 0]} castShadow receiveShadow>
             <boxGeometry args={[1.2, 0.1, 1.2]} />
             <meshStandardMaterial
-              color={isVariant ? "#92400E" : "#8B4513"}
+              color={
+                isBackOption ? "#7F1D1D" : isVariant ? "#92400E" : "#8B4513"
+              }
               roughness={0.8}
             />
           </mesh>
@@ -145,7 +138,9 @@ export const CoffeeMug = ({
           <mesh position={[0, -0.7, 0]} castShadow receiveShadow>
             <cylinderGeometry args={[0.1, 0.15, 1, 8]} />
             <meshStandardMaterial
-              color={isVariant ? "#92400E" : "#8B4513"}
+              color={
+                isBackOption ? "#7F1D1D" : isVariant ? "#92400E" : "#8B4513"
+              }
               roughness={0.8}
             />
           </mesh>
@@ -154,13 +149,15 @@ export const CoffeeMug = ({
           <mesh position={[0, -1.2, 0]} receiveShadow>
             <cylinderGeometry args={[0.4, 0.5, 0.1, 8]} />
             <meshStandardMaterial
-              color={isVariant ? "#92400E" : "#8B4513"}
+              color={
+                isBackOption ? "#7F1D1D" : isVariant ? "#92400E" : "#8B4513"
+              }
               roughness={0.8}
             />
           </mesh>
         </group>
 
-        <group visible={!isBreaking} position={[0, -0.6, 0]}>
+        <group visible={!isBreaking} position={[0, -1.5, 5]}>
           {/* Mug body */}
           <mesh castShadow receiveShadow>
             <cylinderGeometry args={[0.4, 0.3, 0.8, 32]} />
@@ -185,7 +182,7 @@ export const CoffeeMug = ({
             />
           </mesh>
 
-          {/* Terminal.shop logo */}
+          {/* Terminal.shop logo or back arrow */}
           <group>
             <Text
               position={[0, 0.2, 0.42]}
@@ -195,7 +192,7 @@ export const CoffeeMug = ({
               anchorX="center"
               anchorY="middle"
             >
-              Terminal.shop
+              {isBackOption ? "← Back" : "Terminal.shop"}
             </Text>
           </group>
 
@@ -208,7 +205,10 @@ export const CoffeeMug = ({
             anchorX="center"
             anchorY="middle"
           >
-            {`${menuItem.name}\n$${menuItem.price.toFixed(2)}`}
+            {`${menuItem.name}`}
+            {!isBackOption &&
+              menuItem.price > 0 &&
+              `\n$${menuItem.price.toFixed(2)}`}
           </Text>
         </group>
       </group>
