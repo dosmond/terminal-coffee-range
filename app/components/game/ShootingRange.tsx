@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { MenuItem } from "@/app/lib/gameState";
 import { Cloud, Html, Sky } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -8,6 +9,7 @@ import * as THREE from "three";
 import { CoffeeMug } from "./CoffeeMug";
 import { useFetch } from "@danstackme/apity";
 import { useSpring, animated } from "@react-spring/three";
+import { CartItem } from "./CartDisplay";
 
 // Placeholder data for development
 const PLACEHOLDER_MENU_ITEMS: MenuItem[] = [
@@ -178,16 +180,19 @@ const MouseHelper = () => {
   );
 };
 
-// Interface for cart items
-interface CartItem {
-  id: string;
-  productName: string;
-  variantName: string;
-  price: number;
-  quantity: number;
+interface ShootingRangeProps {
+  cart: CartItem[];
+  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
+  lastAdded: string | null;
+  setLastAdded: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-export const ShootingRange = () => {
+export const ShootingRange = ({
+  cart,
+  setCart,
+  lastAdded,
+  setLastAdded,
+}: ShootingRangeProps) => {
   // Game mode state: 'products' for showing all coffees, 'variants' for showing variants of selected coffee
   const [gameMode, setGameMode] = useState<"products" | "variants">("products");
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
@@ -199,8 +204,6 @@ export const ShootingRange = () => {
   const [score, setScore] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [lastAdded, setLastAdded] = useState<string | null>(null);
 
   const mousePosition = useRef(new THREE.Vector2());
   const raycaster = useRef(new THREE.Raycaster());
@@ -321,10 +324,11 @@ export const ShootingRange = () => {
                     quantity: 1,
                   };
 
-                  setCart((prevCart) => {
+                  // Update cart with the new item
+                  setCart((prevCart: CartItem[]) => {
                     // Check if this variant is already in the cart
                     const existingItemIndex = prevCart.findIndex(
-                      (item) => item.id === hitVariant.id
+                      (item: CartItem) => item.id === hitVariant.id
                     );
 
                     if (existingItemIndex >= 0) {
@@ -460,179 +464,15 @@ export const ShootingRange = () => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Calculate total price of cart
-  const cartTotal = useMemo(
-    () => cart.reduce((total, item) => total + item.price * item.quantity, 0),
-    [cart]
-  );
-
-  // Effect to clear lastAdded notification after it fades
-  useEffect(() => {
-    if (lastAdded) {
-      const timer = setTimeout(() => {
-        setLastAdded(null);
-      }, 2000); // Match the fadeOut animation duration
-      return () => clearTimeout(timer);
-    }
-  }, [lastAdded]);
-
   return (
     <group ref={sceneRef}>
       {skyAndClouds}
-
-      {/* Cart Display in top left */}
-      <Html fullscreen style={{ pointerEvents: "none" }}>
-        <div
-          style={{
-            color: "#0f0", // Terminal green
-            fontFamily: "'Courier New', monospace",
-            backgroundColor: "rgba(0, 0, 0, 0.85)",
-            padding: "15px",
-            borderRadius: "5px",
-            border: "1px solid #0f0",
-            textAlign: "left",
-            width: "300px",
-            maxHeight: "calc(100vh - 40px)",
-            overflowY: "auto",
-            boxShadow: "0 0 10px rgba(0, 255, 0, 0.5)",
-            position: "fixed",
-            top: "20px",
-            left: "20px",
-            zIndex: 100,
-            pointerEvents: "auto",
-          }}
-        >
-          {/* Cart content */}
-          <div
-            style={{
-              fontSize: "18px",
-              fontWeight: "bold",
-              marginBottom: "10px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span>&gt; YOUR ORDER:</span>
-            {cart.length > 0 && (
-              <button
-                onClick={() => {
-                  setCart([]);
-                  setLastAdded("Cleared all items");
-                }}
-                style={{
-                  background: "none",
-                  border: "1px solid #0f0",
-                  color: "#0f0",
-                  padding: "2px 8px",
-                  fontSize: "14px",
-                  cursor: "pointer",
-                  borderRadius: "3px",
-                  fontFamily: "'Courier New', monospace",
-                }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    "rgba(0, 255, 0, 0.2)")
-                }
-                onMouseOut={(e) =>
-                  (e.currentTarget.style.backgroundColor = "transparent")
-                }
-              >
-                CLEAR
-              </button>
-            )}
-          </div>
-          {cart.length === 0 ? (
-            <div style={{ opacity: 0.7 }}>
-              &gt; No items selected. Shoot a coffee variant to add it to your
-              order...
-              <span className="cursor-blink">_</span>
-            </div>
-          ) : (
-            <>
-              {cart.map((item, index) => (
-                <div key={index} style={{ marginBottom: "5px" }}>
-                  &gt; {item.quantity}x {item.productName}: {item.variantName}{" "}
-                  <span>${(item.price * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
-              <div
-                style={{
-                  borderTop: "1px solid #0f0",
-                  marginTop: "10px",
-                  paddingTop: "5px",
-                  fontWeight: "bold",
-                }}
-              >
-                &gt; TOTAL: ${cartTotal.toFixed(2)}
-                <span className="cursor-blink">_</span>
-              </div>
-            </>
-          )}
-          <style jsx>{`
-            .cursor-blink {
-              animation: blink 1s step-end infinite;
-              font-weight: bold;
-            }
-            @keyframes blink {
-              0%,
-              100% {
-                opacity: 1;
-              }
-              50% {
-                opacity: 0;
-              }
-            }
-            button:hover {
-              background-color: rgba(0, 255, 0, 0.2);
-            }
-          `}</style>
-        </div>
-      </Html>
-
-      {/* Add notification when item is added to cart - also fixed */}
-      {lastAdded && (
-        <Html fullscreen style={{ pointerEvents: "none" }}>
-          <div
-            style={{
-              color: "#0f0",
-              fontFamily: "'Courier New', monospace",
-              backgroundColor: "rgba(0, 0, 0, 0.85)",
-              padding: "8px 15px",
-              borderRadius: "5px",
-              textAlign: "left",
-              animation: "fadeOut 2s forwards",
-              fontWeight: "bold",
-              position: "fixed",
-              top: "calc(320px + 40px)",
-              left: "20px",
-              zIndex: 100,
-              pointerEvents: "auto",
-            }}
-          >
-            &gt; Added to order: {lastAdded}
-            <style jsx>{`
-              @keyframes fadeOut {
-                0% {
-                  opacity: 1;
-                }
-                70% {
-                  opacity: 1;
-                }
-                100% {
-                  opacity: 0;
-                }
-              }
-            `}</style>
-          </div>
-        </Html>
-      )}
 
       {/* Mouse Helper Animation - only show on desktop */}
       {showControls && menuItems.length > 5 && !isMobile && <MouseHelper />}
 
       {/* Game mode indicator */}
-      <Html position={[0, 10, 0]}>
+      <Html position={[0, 10, -10]}>
         <div
           style={{
             color: "white",
@@ -683,45 +523,11 @@ export const ShootingRange = () => {
               key={item.id}
               position={getMugPosition(index, menuItems.length)}
               menuItem={item}
-              isVariant={gameMode === "variants"}
+              isVariant={gameMode == "variants"}
             />
           ))
         )}
       </group>
-
-      {/* Navigation indicators for many mugs */}
-      {menuItems.length > 5 && (
-        <>
-          <Html position={[-12, 2, -10]}>
-            <div
-              style={{
-                opacity: 0.7,
-                color: "white",
-                backgroundColor: "rgba(0,0,0,0.3)",
-                padding: "10px",
-                borderRadius: "10px",
-                fontSize: "20px",
-              }}
-            >
-              {isMobile ? "← Two fingers" : "← Right-click & Drag"}
-            </div>
-          </Html>
-          <Html position={[12, 2, -10]}>
-            <div
-              style={{
-                opacity: 0.7,
-                color: "white",
-                backgroundColor: "rgba(0,0,0,0.3)",
-                padding: "10px",
-                borderRadius: "10px",
-                fontSize: "20px",
-              }}
-            >
-              {isMobile ? "Two fingers →" : "Right-click & Drag →"}
-            </div>
-          </Html>
-        </>
-      )}
 
       {/* Add lighting to highlight the stands */}
       <directionalLight

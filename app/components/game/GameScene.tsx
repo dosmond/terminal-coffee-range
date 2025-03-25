@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import {
   CameraShake,
   OrbitControls,
@@ -10,8 +11,21 @@ import { Suspense, useState, useEffect } from "react";
 import { Scope } from "./Scope";
 import { ShootingRange } from "./ShootingRange";
 import { WelcomeMenu } from "./WelcomeMenu";
+import { CartItem } from "./CartDisplay";
 
-export const GameScene = () => {
+interface GameSceneProps {
+  cart: CartItem[];
+  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
+  lastAdded: string | null;
+  setLastAdded: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
+export const GameScene = ({
+  cart,
+  setCart,
+  lastAdded,
+  setLastAdded,
+}: GameSceneProps) => {
   const [gameStarted, setGameStarted] = useState(false);
 
   const handleStartGame = () => {
@@ -47,11 +61,12 @@ export const GameScene = () => {
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
           />
-          <ShootingRange />
-          {/* <Environment
-            files="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/lilienstein_2k.hdr"
-            ground={{ height: 4, radius: 50, scale: 20 }}
-          /> */}
+          <ShootingRange
+            cart={cart}
+            setCart={setCart}
+            lastAdded={lastAdded}
+            setLastAdded={setLastAdded}
+          />
           <CameraShake
             maxYaw={0.01}
             maxPitch={0.01}
@@ -64,11 +79,8 @@ export const GameScene = () => {
             enablePan={true}
             enableZoom={false}
             enableRotate={false}
-            minPolarAngle={Math.PI / 2} // Lock at 90 degrees (horizontal)
-            maxPolarAngle={Math.PI / 2} // L
-            // ock at 90 degrees (horizontal)
-            // This prevents Y-axis movement during panning
-            addEventListener={undefined}
+            maxPolarAngle={Math.PI / 2}
+            minPolarAngle={Math.PI / 2}
             panSpeed={1.5}
             screenSpacePanning={true}
             mouseButtons={{
