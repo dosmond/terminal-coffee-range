@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import { useFrame } from "@react-three/fiber";
-import { Text, Html } from "@react-three/drei";
-import * as THREE from "three";
-import { useSpring, animated, config } from "@react-spring/three";
 import { MenuItem } from "@/app/lib/gameState";
-import { MugParticles } from "./MugParticles";
+import { animated, useSpring } from "@react-spring/three";
+import { Html, Text } from "@react-three/drei";
 import type { ThreeEvent } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import { MugParticles } from "./MugParticles";
 
 interface CoffeeMugProps {
   position: [number, number, number];
@@ -173,9 +173,9 @@ export const CoffeeMug = ({
             />
           </mesh>
 
-          {/* Mug handle */}
-          <mesh position={[0.5, 0, 0]} castShadow>
-            <torusGeometry args={[0.2, 0.05, 16, 32, Math.PI]} />
+          {/* Mug handle - single torus partially inside the cup */}
+          <mesh position={[0.35, 0, 0]} rotation={[0, 0, 0]} castShadow>
+            <torusGeometry args={[0.25, 0.05]} />
             <animated.meshStandardMaterial
               color={bodyColor}
               metalness={0.1}
