@@ -176,6 +176,19 @@ interface ShootingRangeProps {
   setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
   lastAdded: string | null;
   setLastAdded: React.Dispatch<React.SetStateAction<string | null>>;
+  onBannerStateChange?: (state: {
+    gameMode: "products" | "variants" | "quantity";
+    selectedProduct?: {
+      name: string;
+      subscription?: "required";
+    };
+    selectedVariant?: {
+      name: string;
+    };
+    menuItemsLength: number;
+    isMobile: boolean;
+    isCartActive: boolean;
+  }) => void;
 }
 
 const quantityOptions: MenuItem[] = [
@@ -189,6 +202,7 @@ export const ShootingRange = ({
   setCart,
   lastAdded,
   setLastAdded,
+  onBannerStateChange,
 }: ShootingRangeProps) => {
   const [gameMode, setGameMode] = useState<
     "products" | "variants" | "quantity"
@@ -579,6 +593,40 @@ export const ShootingRange = ({
     };
   }, []);
 
+  // Update banner state whenever relevant values change
+  useEffect(() => {
+    if (onBannerStateChange) {
+      onBannerStateChange({
+        gameMode,
+        selectedProduct: selectedProduct
+          ? {
+              name: selectedProduct.name,
+              subscription:
+                selectedProduct.subscription === "required"
+                  ? "required"
+                  : undefined,
+            }
+          : undefined,
+        selectedVariant: selectedVariant
+          ? {
+              name: selectedVariant.name,
+            }
+          : undefined,
+        menuItemsLength: menuItems.length,
+        isMobile,
+        isCartActive,
+      });
+    }
+  }, [
+    gameMode,
+    selectedProduct,
+    selectedVariant,
+    menuItems.length,
+    isMobile,
+    isCartActive,
+    onBannerStateChange,
+  ]);
+
   console.log(menuItems);
 
   return (
@@ -588,47 +636,6 @@ export const ShootingRange = ({
       {/* Mouse Helper Animation - only show on desktop when cart is not active */}
       {showControls && menuItems.length > 5 && !isMobile && !isCartActive && (
         <MouseHelper />
-      )}
-
-      {/* Game mode indicator - only show when cart is not active */}
-      {!isCartActive && (
-        <Html position={[0, 10, -10]}>
-          <div
-            style={{
-              color: "white",
-              backgroundColor:
-                gameMode === "variants"
-                  ? "rgba(39, 99, 195, 0.7)"
-                  : gameMode === "quantity"
-                  ? "rgba(76, 175, 80, 0.7)"
-                  : "rgba(0, 0, 0, 0.5)",
-              padding: "10px",
-              borderRadius: "10px",
-              textAlign: "center",
-              fontWeight: "bold",
-              fontSize: "20px",
-              width: "300px",
-              transform: "translateX(-50%)",
-            }}
-          >
-            {gameMode === "products"
-              ? "SHOOT TO SELECT A COFFEE"
-              : gameMode === "variants"
-              ? `${selectedProduct?.name}${
-                  selectedProduct?.subscription === "required"
-                    ? " (SUBSCRIPTION)"
-                    : ""
-                }: CHOOSE A VARIANT`
-              : `${selectedProduct?.name} - ${selectedVariant?.name}: CHOOSE QUANTITY`}
-            {menuItems.length > 5 && (
-              <div style={{ fontSize: "16px", marginTop: "5px" }}>
-                {isMobile
-                  ? "Use two fingers to pan and see more options"
-                  : "Right-click and drag to see more options"}
-              </div>
-            )}
-          </div>
-        </Html>
       )}
 
       {/* Ground - only visible when not using webcam */}

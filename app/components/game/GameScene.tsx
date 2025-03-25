@@ -12,6 +12,7 @@ import { Scope } from "./Scope";
 import { ShootingRange } from "./ShootingRange";
 import { WelcomeMenu } from "./WelcomeMenu";
 import { CartItem, CartDisplay } from "./CartDisplay";
+import { GameBanner } from "./GameBanner";
 import { useFetch } from "@danstackme/apity";
 import { AddressSchema, CardSchema } from "../../../endpoints";
 import { z } from "zod";
@@ -34,6 +35,24 @@ export const GameScene = ({
   setLastAdded,
 }: GameSceneProps) => {
   const [gameStarted, setGameStarted] = useState(false);
+  const [bannerState, setBannerState] = useState<{
+    gameMode: "products" | "variants" | "quantity";
+    selectedProduct?: {
+      name: string;
+      subscription?: "required";
+    };
+    selectedVariant?: {
+      name: string;
+    };
+    menuItemsLength: number;
+    isMobile: boolean;
+    isCartActive: boolean;
+  }>({
+    gameMode: "products",
+    menuItemsLength: 0,
+    isMobile: false,
+    isCartActive: false,
+  });
 
   // Fetch saved addresses
   const { data: addressesData, refetch: refetchAddresses } = useFetch({
@@ -93,6 +112,9 @@ export const GameScene = ({
         refetchCards={handleRefetchCards}
       />
 
+      {/* Game Banner outside the Canvas */}
+      <GameBanner {...bannerState} />
+
       <Canvas shadows>
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault position={[0, 1, 10]} />
@@ -109,6 +131,7 @@ export const GameScene = ({
             setCart={setCart}
             lastAdded={lastAdded}
             setLastAdded={setLastAdded}
+            onBannerStateChange={setBannerState}
           />
           <CameraShake
             maxYaw={0.01}
