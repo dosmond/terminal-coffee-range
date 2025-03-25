@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
-import * as THREE from "three";
-import { Html, Sky, Cloud } from "@react-three/drei";
 import { MenuItem } from "@/app/lib/gameState";
+import { Cloud, Html, Sky } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import { CoffeeMug } from "./CoffeeMug";
+import { useFetch } from "@danstackme/apity";
+import { useSpring, animated } from "@react-spring/three";
 
 // Placeholder data for development
 const PLACEHOLDER_MENU_ITEMS: MenuItem[] = [
@@ -16,39 +18,248 @@ const PLACEHOLDER_MENU_ITEMS: MenuItem[] = [
   { id: "5", name: "Americano", price: 3.49 },
 ];
 
+// Audio system for game sounds
+const useAudio = () => {
+  const gunshotRef = useRef<HTMLAudioElement | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    // Create audio elements
+    gunshotRef.current = new Audio("/sounds/gunshot.mp3");
+
+    // Load the audio elements
+    const loadAudio = async () => {
+      try {
+        if (gunshotRef.current) {
+          gunshotRef.current.volume = 0.6;
+          gunshotRef.current.load();
+        }
+        setIsLoaded(true);
+      } catch (error) {
+        console.error("Failed to load audio", error);
+      }
+    };
+
+    loadAudio();
+
+    return () => {
+      // Clean up audio elements
+      if (gunshotRef.current) {
+        gunshotRef.current.pause();
+        gunshotRef.current = null;
+      }
+    };
+  }, []);
+
+  const playGunshot = () => {
+    if (gunshotRef.current) {
+      // Reset the audio to the beginning if it's already playing
+      gunshotRef.current.currentTime = 0;
+      gunshotRef.current
+        .play()
+        .catch((err) => console.error("Error playing gunshot sound:", err));
+    }
+  };
+
+  return { playGunshot, isLoaded };
+};
+
+// MouseHelper component to show right-click dragging animation
+const MouseHelper = () => {
+  const [visible, setVisible] = useState(true);
+
+  // Hide after 10 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setVisible(false);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <group position={[0, 1, -6]}>
+      <Html>
+        <div
+          style={{
+            position: "relative",
+            width: "160px",
+            height: "100px",
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+          }}
+        >
+          {/* CSS mouse cursor */}
+          <div
+            style={{
+              position: "absolute",
+              width: "30px",
+              height: "45px",
+              borderRadius: "12px",
+              border: "2px solid white",
+              background: "rgba(0,0,0,0.6)",
+              animation: "moveLeftRight 2s infinite alternate ease-in-out",
+              left: "60px",
+              top: "20px",
+            }}
+          >
+            {/* Right mouse button highlight */}
+            <div
+              style={{
+                position: "absolute",
+                width: "12px",
+                height: "15px",
+                borderRadius: "5px",
+                background: "rgba(255,255,255,0.6)",
+                right: "2px",
+                top: "2px",
+                animation: "pulse 1s infinite alternate ease-in-out",
+              }}
+            />
+
+            {/* Scroll wheel */}
+            <div
+              style={{
+                position: "absolute",
+                width: "6px",
+                height: "10px",
+                borderRadius: "3px",
+                background: "rgba(255,255,255,0.3)",
+                left: "12px",
+                top: "5px",
+              }}
+            />
+          </div>
+
+          {/* Cursor movement arrows */}
+          <div
+            style={{
+              position: "absolute",
+              left: "30px",
+              top: "40px",
+              fontSize: "18px",
+              color: "white",
+              animation: "fadeInOut 2s infinite alternate ease-in-out",
+            }}
+          >
+            ←→
+          </div>
+
+          <style jsx>{`
+            @keyframes moveLeftRight {
+              0% {
+                transform: translateX(-20px);
+              }
+              100% {
+                transform: translateX(20px);
+              }
+            }
+            @keyframes pulse {
+              0% {
+                background: rgba(255, 255, 255, 0.3);
+              }
+              100% {
+                background: rgba(255, 255, 255, 0.9);
+              }
+            }
+            @keyframes fadeInOut {
+              0% {
+                opacity: 0.4;
+              }
+              100% {
+                opacity: 1;
+              }
+            }
+          `}</style>
+        </div>
+      </Html>
+    </group>
+  );
+};
+
+// Interface for cart items
+interface CartItem {
+  id: string;
+  productName: string;
+  variantName: string;
+  price: number;
+  quantity: number;
+}
+
 export const ShootingRange = () => {
+  // Game mode state: 'products' for showing all coffees, 'variants' for showing variants of selected coffee
+  const [gameMode, setGameMode] = useState<"products" | "variants">("products");
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(
     PLACEHOLDER_MENU_ITEMS
   );
-  const [debug, setDebug] = useState(false);
   const [lastHit, setLastHit] = useState<string | null>(null);
   const [shotsFired, setShotsFired] = useState(0);
   const [score, setScore] = useState(0);
+  const [showControls, setShowControls] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [lastAdded, setLastAdded] = useState<string | null>(null);
 
   const mousePosition = useRef(new THREE.Vector2());
   const raycaster = useRef(new THREE.Raycaster());
   const sceneRef = useRef<THREE.Group>(null);
 
   const { camera } = useThree();
+  const { playGunshot } = useAudio();
 
-  // Add keyboard shortcut to toggle debug mode
+  // Fetch coffee products
+  const { data: coffeeList, isLoading } = useFetch({
+    path: "/product",
+  });
+
+  // Process coffee products when data is loaded
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "d") {
-        setDebug((prev) => !prev);
-      }
-    };
+    if (coffeeList?.data && gameMode === "products") {
+      // Map coffee products to menu items
+      const productItems: MenuItem[] = coffeeList.data
+        .filter(
+          (product: any) => product.variants && product.variants.length > 0
+        ) // Filter out products without variants
+        .map((product: any) => ({
+          id: product.id,
+          name: product.name,
+          price: (product.variants[0]?.price || 0) / 100, // Convert cents to dollars
+        }));
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
+      if (productItems.length > 0) {
+        setMenuItems(productItems);
+      } else {
+        // Fallback to placeholder if no valid products
+        setMenuItems(PLACEHOLDER_MENU_ITEMS);
+      }
+    }
+  }, [coffeeList, gameMode]);
+
+  // Update menuItems when switching to variant mode
+  useEffect(() => {
+    if (gameMode === "variants" && selectedProduct) {
+      // Map variants to menu items
+      const variantItems: MenuItem[] = selectedProduct.variants.map(
+        (variant: any) => ({
+          id: variant.id,
+          name: variant.name,
+          price: variant.price / 100, // Convert cents to dollars
+        })
+      );
+
+      setMenuItems(variantItems);
+    }
+  }, [gameMode, selectedProduct]);
 
   // Handle window clicks for shooting
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       setShotsFired((prev) => prev + 1);
+
+      // Play gunshot sound
+      playGunshot();
 
       // Update mouse position
       mousePosition.current.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -64,9 +275,6 @@ export const ShootingRange = () => {
           true
         );
 
-        if (debug)
-          console.log("Click detected, intersections:", intersects.length);
-
         if (intersects.length > 0) {
           // Find the mug group with userData
           let currentObject = intersects[0].object;
@@ -77,26 +285,75 @@ export const ShootingRange = () => {
           while (currentObject && mugIndex === -1) {
             if (currentObject.userData && currentObject.userData.menuItemId) {
               menuItemId = currentObject.userData.menuItemId as string;
-              if (debug) console.log("Found mug with ID:", menuItemId);
 
               // Find which mug was hit by looking up its ID
               mugIndex = menuItems.findIndex((item) => item.id === menuItemId);
 
               if (mugIndex !== -1) {
-                // Register a hit
-                setLastHit(
-                  `Hit: ${menuItems[mugIndex].name} ($${menuItems[mugIndex].price})`
-                );
-                setScore(
-                  (prev) => prev + Math.round(menuItems[mugIndex].price * 100)
-                );
+                // Handle hit based on game mode
+                if (gameMode === "products") {
+                  // Find the selected product in the coffee list
+                  const hitProduct = coffeeList?.data.find(
+                    (p: any) => p.id === menuItemId
+                  );
+                  if (hitProduct) {
+                    // Switch to variant mode
+                    setSelectedProduct(hitProduct);
+                    setGameMode("variants");
+                    setLastHit(`Selected: ${hitProduct.name}`);
+                  }
+                } else {
+                  // In variant mode - register a hit on a variant
+                  const hitVariant = menuItems[mugIndex];
+                  setLastHit(
+                    `Hit: ${selectedProduct?.name} - ${
+                      hitVariant.name
+                    } ($${hitVariant.price.toFixed(2)})`
+                  );
+                  setScore((prev) => prev + Math.round(hitVariant.price * 100));
 
-                // Trigger the mug shot event
-                window.dispatchEvent(
-                  new CustomEvent("mug-shot", {
-                    detail: { id: menuItemId },
-                  })
-                );
+                  // Add to cart
+                  const newItem: CartItem = {
+                    id: hitVariant.id,
+                    productName: selectedProduct?.name || "",
+                    variantName: hitVariant.name,
+                    price: hitVariant.price,
+                    quantity: 1,
+                  };
+
+                  setCart((prevCart) => {
+                    // Check if this variant is already in the cart
+                    const existingItemIndex = prevCart.findIndex(
+                      (item) => item.id === hitVariant.id
+                    );
+
+                    if (existingItemIndex >= 0) {
+                      // Increment quantity of existing item
+                      const updatedCart = [...prevCart];
+                      updatedCart[existingItemIndex].quantity += 1;
+                      return updatedCart;
+                    } else {
+                      // Add new item to cart
+                      return [...prevCart, newItem];
+                    }
+                  });
+
+                  // Set last added item with product and variant name
+                  setLastAdded(`${selectedProduct?.name} - ${hitVariant.name}`);
+
+                  // Reset to product selection mode
+                  setTimeout(() => {
+                    setGameMode("products");
+                    setSelectedProduct(null);
+                  }, 1500);
+
+                  // Trigger the mug shot event
+                  window.dispatchEvent(
+                    new CustomEvent("mug-shot", {
+                      detail: { id: menuItemId },
+                    })
+                  );
+                }
               }
             }
 
@@ -108,7 +365,6 @@ export const ShootingRange = () => {
           }
 
           if (mugIndex === -1) {
-            if (debug) console.log("No mug userData found in intersection");
             setLastHit("Miss!");
           }
         } else {
@@ -119,7 +375,7 @@ export const ShootingRange = () => {
 
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
-  }, [camera, menuItems, debug]);
+  }, [camera, menuItems, playGunshot, gameMode, selectedProduct, coffeeList]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -136,91 +392,346 @@ export const ShootingRange = () => {
     raycaster.current.setFromCamera(mousePosition.current, camera);
   });
 
+  // Memoize the clouds and sky to prevent re-rendering on every state change
+  const skyAndClouds = useMemo(
+    () => (
+      <>
+        {/* Sky */}
+        <Sky
+          distance={4500000}
+          sunPosition={[1, 0, 0]}
+          inclination={0.6}
+          azimuth={0.1}
+          rayleigh={0.5}
+        />
+
+        {/* Clouds */}
+        <Cloud position={[-20, 40, -100]} speed={0.2} opacity={0.8} />
+        <Cloud position={[20, 30, -100]} speed={0.2} opacity={0.6} />
+        <Cloud position={[0, 35, -80]} speed={0.2} opacity={0.7} />
+      </>
+    ),
+    []
+  );
+
+  // Calculate spacing for mugs based on count
+  const getMugPosition = (
+    index: number,
+    totalItems: number
+  ): [number, number, number] => {
+    // Base spacing between mugs
+    const baseSpacing = 3;
+
+    // Adjust spacing based on number of items
+    const spacing =
+      totalItems > 5 ? Math.min(baseSpacing, 20 / totalItems) : baseSpacing;
+
+    // Calculate x position
+    const x = (index - (totalItems - 1) / 2) * spacing;
+
+    return [x, 0, 0];
+  };
+
+  // Hide controls helper after user has panned
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      // If right button is pressed
+      if (e.button === 2) {
+        setShowControls(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handleMouseDown);
+    return () => window.removeEventListener("mousedown", handleMouseDown);
+  }, []);
+
+  // Detect if user is on mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        )
+      );
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Calculate total price of cart
+  const cartTotal = useMemo(
+    () => cart.reduce((total, item) => total + item.price * item.quantity, 0),
+    [cart]
+  );
+
+  // Effect to clear lastAdded notification after it fades
+  useEffect(() => {
+    if (lastAdded) {
+      const timer = setTimeout(() => {
+        setLastAdded(null);
+      }, 2000); // Match the fadeOut animation duration
+      return () => clearTimeout(timer);
+    }
+  }, [lastAdded]);
+
   return (
     <group ref={sceneRef}>
-      {/* Sky */}
-      <Sky
-        distance={4500000}
-        sunPosition={[1, 0, 0]}
-        inclination={0.6}
-        azimuth={0.1}
-        rayleigh={0.5}
-      />
+      {skyAndClouds}
 
-      {/* Clouds */}
-      <Cloud position={[-20, 40, -100]} speed={0.2} opacity={0.8} />
-      <Cloud position={[20, 30, -100]} speed={0.2} opacity={0.6} />
-      <Cloud position={[0, 35, -80]} speed={0.2} opacity={0.7} />
-
-      {/* Debug overlay */}
-      {debug && (
-        <Html position={[0, 5, 0]}>
+      {/* Cart Display in top left */}
+      <Html fullscreen style={{ pointerEvents: "none" }}>
+        <div
+          style={{
+            color: "#0f0", // Terminal green
+            fontFamily: "'Courier New', monospace",
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            padding: "15px",
+            borderRadius: "5px",
+            border: "1px solid #0f0",
+            textAlign: "left",
+            width: "300px",
+            maxHeight: "calc(100vh - 40px)",
+            overflowY: "auto",
+            boxShadow: "0 0 10px rgba(0, 255, 0, 0.5)",
+            position: "fixed",
+            top: "20px",
+            left: "20px",
+            zIndex: 100,
+            pointerEvents: "auto",
+          }}
+        >
+          {/* Cart content */}
           <div
             style={{
-              color: "white",
-              backgroundColor: "rgba(0,0,0,0.5)",
-              padding: "10px",
+              fontSize: "18px",
+              fontWeight: "bold",
+              marginBottom: "10px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            <div>
-              Mouse: {mousePosition.current.x.toFixed(2)},{" "}
-              {mousePosition.current.y.toFixed(2)}
+            <span>&gt; YOUR ORDER:</span>
+            {cart.length > 0 && (
+              <button
+                onClick={() => {
+                  setCart([]);
+                  setLastAdded("Cleared all items");
+                }}
+                style={{
+                  background: "none",
+                  border: "1px solid #0f0",
+                  color: "#0f0",
+                  padding: "2px 8px",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  borderRadius: "3px",
+                  fontFamily: "'Courier New', monospace",
+                }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "rgba(0, 255, 0, 0.2)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor = "transparent")
+                }
+              >
+                CLEAR
+              </button>
+            )}
+          </div>
+          {cart.length === 0 ? (
+            <div style={{ opacity: 0.7 }}>
+              &gt; No items selected. Shoot a coffee variant to add it to your
+              order...
+              <span className="cursor-blink">_</span>
             </div>
-            <div>Shots fired: {shotsFired}</div>
-            <div>Score: {score}</div>
-            <div>{lastHit || "No hit yet"}</div>
-            <button
-              onClick={() => setDebug(false)}
-              style={{
-                backgroundColor: "#333",
-                color: "white",
-                border: "1px solid white",
-                padding: "5px",
-                marginTop: "5px",
-              }}
-            >
-              Hide Debug
-            </button>
+          ) : (
+            <>
+              {cart.map((item, index) => (
+                <div key={index} style={{ marginBottom: "5px" }}>
+                  &gt; {item.quantity}x {item.productName}: {item.variantName}{" "}
+                  <span>${(item.price * item.quantity).toFixed(2)}</span>
+                </div>
+              ))}
+              <div
+                style={{
+                  borderTop: "1px solid #0f0",
+                  marginTop: "10px",
+                  paddingTop: "5px",
+                  fontWeight: "bold",
+                }}
+              >
+                &gt; TOTAL: ${cartTotal.toFixed(2)}
+                <span className="cursor-blink">_</span>
+              </div>
+            </>
+          )}
+          <style jsx>{`
+            .cursor-blink {
+              animation: blink 1s step-end infinite;
+              font-weight: bold;
+            }
+            @keyframes blink {
+              0%,
+              100% {
+                opacity: 1;
+              }
+              50% {
+                opacity: 0;
+              }
+            }
+            button:hover {
+              background-color: rgba(0, 255, 0, 0.2);
+            }
+          `}</style>
+        </div>
+      </Html>
+
+      {/* Add notification when item is added to cart - also fixed */}
+      {lastAdded && (
+        <Html fullscreen style={{ pointerEvents: "none" }}>
+          <div
+            style={{
+              color: "#0f0",
+              fontFamily: "'Courier New', monospace",
+              backgroundColor: "rgba(0, 0, 0, 0.85)",
+              padding: "8px 15px",
+              borderRadius: "5px",
+              textAlign: "left",
+              animation: "fadeOut 2s forwards",
+              fontWeight: "bold",
+              position: "fixed",
+              top: "calc(320px + 40px)",
+              left: "20px",
+              zIndex: 100,
+              pointerEvents: "auto",
+            }}
+          >
+            &gt; Added to order: {lastAdded}
+            <style jsx>{`
+              @keyframes fadeOut {
+                0% {
+                  opacity: 1;
+                }
+                70% {
+                  opacity: 1;
+                }
+                100% {
+                  opacity: 0;
+                }
+              }
+            `}</style>
           </div>
         </Html>
       )}
 
-      {/* Score display */}
-      <Html position={[0, 8, 0]}>
+      {/* Mouse Helper Animation - only show on desktop */}
+      {showControls && menuItems.length > 5 && !isMobile && <MouseHelper />}
+
+      {/* Game mode indicator */}
+      <Html position={[0, 10, 0]}>
         <div
           style={{
             color: "white",
-            backgroundColor: "rgba(0,0,0,0.3)",
+            backgroundColor:
+              gameMode === "variants"
+                ? "rgba(39, 99, 195, 0.7)"
+                : "rgba(0, 0, 0, 0.5)",
             padding: "10px",
             borderRadius: "10px",
             textAlign: "center",
             fontWeight: "bold",
-            fontSize: "18px",
-            width: "200px",
+            fontSize: "20px",
+            width: "300px",
             transform: "translateX(-50%)",
           }}
         >
-          <div>Score: {score}</div>
-          <div>Shots: {shotsFired}</div>
+          {gameMode === "products"
+            ? "SHOOT TO SELECT A COFFEE"
+            : `${selectedProduct?.name}: CHOOSE A VARIANT`}
+          {menuItems.length > 5 && (
+            <div style={{ fontSize: "16px", marginTop: "5px" }}>
+              {isMobile
+                ? "Use two fingers to pan and see more options"
+                : "Right-click and drag to see more options"}
+            </div>
+          )}
         </div>
       </Html>
 
-      {/* Ground - grass field */}
+      {/* Ground - only visible when not using webcam */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
         <planeGeometry args={[100, 100]} />
         <meshStandardMaterial color="#2d5c27" />
       </mesh>
-
-      {/* Coffee mugs */}
+      {/* Coffee mugs with stands */}
       <group position={[0, 2, -10]}>
-        {menuItems.map((item, index) => (
-          <CoffeeMug
-            key={item.id}
-            position={[(index - (menuItems.length - 1) / 2) * 3, 0, 0]}
-            menuItem={item}
-          />
-        ))}
+        {isLoading ? (
+          // Loading state
+          <Html position={[0, 1, 0]}>
+            <div style={{ color: "white", fontSize: "24px" }}>
+              Loading coffee products...
+            </div>
+          </Html>
+        ) : (
+          // Render mugs based on available menu items
+          menuItems.map((item, index) => (
+            <CoffeeMug
+              key={item.id}
+              position={getMugPosition(index, menuItems.length)}
+              menuItem={item}
+              isVariant={gameMode === "variants"}
+            />
+          ))
+        )}
       </group>
+
+      {/* Navigation indicators for many mugs */}
+      {menuItems.length > 5 && (
+        <>
+          <Html position={[-12, 2, -10]}>
+            <div
+              style={{
+                opacity: 0.7,
+                color: "white",
+                backgroundColor: "rgba(0,0,0,0.3)",
+                padding: "10px",
+                borderRadius: "10px",
+                fontSize: "20px",
+              }}
+            >
+              {isMobile ? "← Two fingers" : "← Right-click & Drag"}
+            </div>
+          </Html>
+          <Html position={[12, 2, -10]}>
+            <div
+              style={{
+                opacity: 0.7,
+                color: "white",
+                backgroundColor: "rgba(0,0,0,0.3)",
+                padding: "10px",
+                borderRadius: "10px",
+                fontSize: "20px",
+              }}
+            >
+              {isMobile ? "Two fingers →" : "Right-click & Drag →"}
+            </div>
+          </Html>
+        </>
+      )}
+
+      {/* Add lighting to highlight the stands */}
+      <directionalLight
+        position={[5, 5, 5]}
+        intensity={0.8}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      <ambientLight intensity={0.4} />
     </group>
   );
 };

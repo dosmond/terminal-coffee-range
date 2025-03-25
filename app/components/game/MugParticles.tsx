@@ -22,7 +22,6 @@ export const MugParticles = ({ position, onComplete }: MugParticlesProps) => {
 
   // Initialize particles
   useEffect(() => {
-    console.log("Creating particles at position", position);
     const newParticles = [];
     // More vibrant, visible colors
     const colors = ["#3B82F6", "#2563EB", "#1D4ED8", "#60A5FA", "#93C5FD"];
@@ -52,7 +51,6 @@ export const MugParticles = ({ position, onComplete }: MugParticlesProps) => {
 
     // Clean up after animation completes
     const timer = setTimeout(() => {
-      console.log("Particles timeout complete");
       if (onComplete) onComplete();
     }, 1500); // Longer animation time
 

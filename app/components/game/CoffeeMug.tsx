@@ -12,9 +12,14 @@ import type { ThreeEvent } from "@react-three/fiber";
 interface CoffeeMugProps {
   position: [number, number, number];
   menuItem: MenuItem;
+  isVariant?: boolean; // Flag to indicate if this mug is showing a variant
 }
 
-export const CoffeeMug = ({ position, menuItem }: CoffeeMugProps) => {
+export const CoffeeMug = ({
+  position,
+  menuItem,
+  isVariant = false,
+}: CoffeeMugProps) => {
   const mugRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
   const [isBreaking, setIsBreaking] = useState(false);
@@ -25,6 +30,17 @@ export const CoffeeMug = ({ position, menuItem }: CoffeeMugProps) => {
   const { opacity } = useSpring({
     opacity: isBreaking ? 0 : 1,
     config: { duration: 150 }, // Fast fade out
+  });
+
+  // Floating animation for variant mugs
+  const { mugPosition } = useSpring({
+    mugPosition: [
+      originalPosition[0],
+      originalPosition[1] +
+        (isVariant ? Math.sin(Date.now() * 0.001) * 0.1 : 0), // Small hover effect for variants
+      originalPosition[2],
+    ],
+    config: { tension: 100, friction: 10 },
   });
 
   const handleShot = (e: ThreeEvent<MouseEvent> | MouseEvent) => {
@@ -51,14 +67,24 @@ export const CoffeeMug = ({ position, menuItem }: CoffeeMugProps) => {
   };
 
   useFrame((state, delta) => {
-    if (mugRef.current && !isBreaking) {
-      // Add subtle floating animation when not breaking
+    if (mugRef.current && !isBreaking && !isVariant) {
+      // Keep position stable for regular mugs
+      mugRef.current.position.y = originalPosition[1];
+    } else if (mugRef.current && !isBreaking && isVariant) {
+      // Add a subtle floating effect for variant mugs
       mugRef.current.position.y =
-        originalPosition[1] + Math.sin(state.clock.elapsedTime) * 0.1;
+        originalPosition[1] + Math.sin(state.clock.elapsedTime * 2) * 0.05;
     }
   });
 
-  const bodyColor = hovered ? "#2563EB" : "#3B82F6";
+  // Choose colors based on whether it's a variant or not
+  const bodyColor = isVariant
+    ? hovered
+      ? "#D97706"
+      : "#F59E0B" // Amber for variants
+    : hovered
+    ? "#2563EB"
+    : "#3B82F6"; // Blue for regular products
 
   // Add a hidden HTML element that can be used for DOM-based click events
   useEffect(() => {
@@ -96,13 +122,45 @@ export const CoffeeMug = ({ position, menuItem }: CoffeeMugProps) => {
         position={originalPosition}
         onClick={handleShot}
         userData={{ menuItemId: menuItem.id }}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
       >
         {/* Add hidden Html element with data attribute for DOM selection */}
         <Html>
           <div data-mug-id={menuItem.id} style={{ display: "none" }} />
         </Html>
 
-        <group visible={!isBreaking}>
+        {/* Stand - always visible */}
+        <group position={[0, -1, 0]}>
+          {/* Top of stand */}
+          <mesh position={[0, -0.15, 0]} castShadow receiveShadow>
+            <boxGeometry args={[1.2, 0.1, 1.2]} />
+            <meshStandardMaterial
+              color={isVariant ? "#92400E" : "#8B4513"}
+              roughness={0.8}
+            />
+          </mesh>
+
+          {/* Leg */}
+          <mesh position={[0, -0.7, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.1, 0.15, 1, 8]} />
+            <meshStandardMaterial
+              color={isVariant ? "#92400E" : "#8B4513"}
+              roughness={0.8}
+            />
+          </mesh>
+
+          {/* Base */}
+          <mesh position={[0, -1.2, 0]} receiveShadow>
+            <cylinderGeometry args={[0.4, 0.5, 0.1, 8]} />
+            <meshStandardMaterial
+              color={isVariant ? "#92400E" : "#8B4513"}
+              roughness={0.8}
+            />
+          </mesh>
+        </group>
+
+        <group visible={!isBreaking} position={[0, -0.6, 0]}>
           {/* Mug body */}
           <mesh castShadow receiveShadow>
             <cylinderGeometry args={[0.4, 0.3, 0.8, 32]} />
@@ -139,19 +197,19 @@ export const CoffeeMug = ({ position, menuItem }: CoffeeMugProps) => {
             >
               Terminal.shop
             </Text>
-
-            {/* Menu item info */}
-            <Text
-              position={[0, -1, 0]}
-              rotation={[0, 0, 0]}
-              fontSize={0.2}
-              color="#FFFFFF"
-              anchorX="center"
-              anchorY="middle"
-            >
-              {`${menuItem.name}\n$${menuItem.price}`}
-            </Text>
           </group>
+
+          {/* Menu item info - part of the mug */}
+          <Text
+            position={[0.1, -0.2, 0.4]}
+            rotation={[0, 0, 0]}
+            fontSize={0.12}
+            color="#FFFFFF"
+            anchorX="center"
+            anchorY="middle"
+          >
+            {`${menuItem.name}\n$${menuItem.price.toFixed(2)}`}
+          </Text>
         </group>
       </group>
     </>

@@ -39,7 +39,7 @@ export const WelcomeMenu = ({ onStart }: WelcomeMenuProps) => {
         </button>
 
         <div className="mt-6 text-sm text-gray-400">
-          Click to shoot • Press D for debug • ESC to exit game
+          Click to shoot • ESC to exit game
         </div>
       </div>
     </div>
