@@ -7,11 +7,18 @@ import {
   PerspectiveCamera,
 } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { Scope } from "./Scope";
 import { ShootingRange } from "./ShootingRange";
 import { WelcomeMenu } from "./WelcomeMenu";
-import { CartItem } from "./CartDisplay";
+import { CartItem, CartDisplay } from "./CartDisplay";
+import { useFetch } from "@danstackme/apity";
+import { AddressSchema, CardSchema } from "../../../endpoints";
+import { z } from "zod";
+
+// Use Zod infer types
+type Address = z.infer<typeof AddressSchema>;
+type Card = z.infer<typeof CardSchema>;
 
 interface GameSceneProps {
   cart: CartItem[];
@@ -27,6 +34,31 @@ export const GameScene = ({
   setLastAdded,
 }: GameSceneProps) => {
   const [gameStarted, setGameStarted] = useState(false);
+
+  // Fetch saved addresses
+  const { data: addressesData, refetch: refetchAddresses } = useFetch({
+    path: "/address",
+    query: {
+      limit: 10,
+    },
+  });
+
+  // Fetch saved payment methods
+  const { data: cardsData, refetch: refetchCards } = useFetch({
+    path: "/card",
+    query: {
+      limit: 10,
+    },
+  });
+
+  // Extract the address and card arrays from the API response
+  const addresses: Address[] = addressesData?.data || [];
+  const cards: Card[] = cardsData?.data || [];
+
+  // Function to refresh the cards data
+  const handleRefetchCards = useCallback(async () => {
+    await refetchCards();
+  }, [refetchCards]);
 
   const handleStartGame = () => {
     setGameStarted(true);
@@ -50,6 +82,17 @@ export const GameScene = ({
 
   return (
     <div className="w-full h-screen relative">
+      {/* Cart display outside the Canvas */}
+      <CartDisplay
+        cart={cart}
+        setCart={setCart}
+        lastAdded={lastAdded}
+        setLastAdded={setLastAdded}
+        addresses={addresses}
+        cards={cards}
+        refetchCards={handleRefetchCards}
+      />
+
       <Canvas shadows>
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault position={[0, 3, 10]} />

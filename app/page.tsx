@@ -5,7 +5,7 @@ import { createApi, ApiProvider } from "@danstackme/apity";
 import { GameScene } from "./components/game/GameScene";
 import { fetchEndpoints, mutateEndpoints } from "../endpoints";
 import { useState } from "react";
-import { CartDisplay, CartItem } from "./components/game/CartDisplay";
+import { CartItem } from "./components/game/CartDisplay";
 
 import axios from "axios";
 
@@ -30,14 +30,6 @@ export default function Home() {
   return (
     <ApiProvider api={api}>
       <main className="min-h-screen">
-        {/* Cart display completely outside the 3D scene */}
-        <CartDisplay
-          cart={cart}
-          setCart={setCart}
-          lastAdded={lastAdded}
-          setLastAdded={setLastAdded}
-        />
-
         <GameScene
           cart={cart}
           setCart={setCart}

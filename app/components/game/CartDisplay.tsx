@@ -2,6 +2,9 @@
 
 import { useMutate } from "@danstackme/apity";
 import React, { useEffect, useState } from "react";
+import { CheckoutForm } from "../checkout/CheckoutForm";
+import { AddressSchema, CardSchema } from "../../../endpoints";
+import { z } from "zod";
 
 // Interface for cart items
 export interface CartItem {
@@ -13,11 +16,18 @@ export interface CartItem {
   isSubscription?: boolean;
 }
 
+// Use Zod infer types
+type Address = z.infer<typeof AddressSchema>;
+type Card = z.infer<typeof CardSchema>;
+
 interface CartDisplayProps {
   cart: CartItem[];
   setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
   lastAdded: string | null;
   setLastAdded: React.Dispatch<React.SetStateAction<string | null>>;
+  addresses: Address[];
+  cards: Card[];
+  refetchCards: () => void;
 }
 
 export const CartDisplay = ({
@@ -25,12 +35,18 @@ export const CartDisplay = ({
   setCart,
   lastAdded,
   setLastAdded,
+  addresses = [],
+  cards = [],
+  refetchCards,
 }: CartDisplayProps) => {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutStatus, setCheckoutStatus] = useState<
     "idle" | "processing" | "success" | "error"
   >("idle");
   const [checkoutMessage, setCheckoutMessage] = useState("");
+  const [showCheckoutForm, setShowCheckoutForm] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
+  const [selectedCardId, setSelectedCardId] = useState<string>("");
 
   // Calculate total price of cart
   const cartTotal = cart.reduce(
@@ -62,10 +78,24 @@ export const CartDisplay = ({
     }
   }, [lastAdded, setLastAdded]);
 
-  // Handle checkout process
-  const handleCheckout = async () => {
+  // Handle starting the checkout process
+  const handleStartCheckout = () => {
     if (cart.length === 0) return;
 
+    // Show the checkout form
+    setShowCheckoutForm(true);
+  };
+
+  // Handle completion of checkout form
+  const handleCheckoutFormComplete = async (
+    addressId: string,
+    cardId: string
+  ) => {
+    setSelectedAddressId(addressId);
+    setSelectedCardId(cardId);
+    setShowCheckoutForm(false);
+
+    // Now proceed with the checkout
     setIsCheckingOut(true);
     setCheckoutStatus("processing");
     setCheckoutMessage("Processing your order...");
@@ -82,8 +112,8 @@ export const CartDisplay = ({
         // Create order using the correct API structure
         await createOrder({
           variants: orderVariants,
-          cardID: "crd_mock1234567890", // This would be a real card ID in production
-          addressID: "shp_mock1234567890", // This would be a real address ID in production
+          cardID: cardId,
+          addressID: addressId,
         });
       }
 
@@ -93,8 +123,8 @@ export const CartDisplay = ({
         await createSubscription({
           productVariantID: item.id,
           quantity: 1, // Subscriptions always have quantity 1
-          cardID: "crd_mock1234567890", // This would be a real card ID in production
-          addressID: "shp_mock1234567890", // This would be a real address ID in production
+          cardID: cardId,
+          addressID: addressId,
           schedule: {
             type: "weekly",
             interval: 2, // Every 2 weeks
@@ -143,7 +173,7 @@ export const CartDisplay = ({
 
   return (
     <div
-      className="fixed top-0 left-0 z-50 font-mono pointer-events-auto"
+      className="fixed top-0 left-0 z-50 font-mono pointer-events-auto cursor-auto"
       onMouseEnter={handleCartMouseEnter}
       onMouseLeave={handleCartMouseLeave}
     >
@@ -151,7 +181,7 @@ export const CartDisplay = ({
       <div className="text-[#0f0] bg-black/85 p-4 rounded-md border border-[#0f0] w-[300px] max-h-[calc(100vh-40px)] overflow-y-auto shadow-[0_0_10px_rgba(0,255,0,0.5)] mt-5 ml-5">
         <div className="text-lg font-bold mb-2.5 flex justify-between items-center">
           <span>&gt; YOUR ORDER:</span>
-          {cart.length > 0 && !isCheckingOut && (
+          {cart.length > 0 && !isCheckingOut && !showCheckoutForm && (
             <button
               onClick={() => {
                 setCart([]);
@@ -222,7 +252,7 @@ export const CartDisplay = ({
 
             <div className="mt-3 flex justify-between gap-2">
               <button
-                onClick={handleCheckout}
+                onClick={handleStartCheckout}
                 disabled={isCheckingOut || cart.length === 0}
                 className={`flex-1 bg-transparent border border-[#0f0] text-[#0f0] px-2 py-1 text-sm rounded cursor-pointer font-mono ${
                   isCheckingOut || cart.length === 0
@@ -237,6 +267,35 @@ export const CartDisplay = ({
         )}
       </div>
 
+      {/* Checkout Form Modal */}
+      {showCheckoutForm && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50 pointer-events-auto">
+          <CheckoutForm
+            addresses={addresses}
+            cards={cards}
+            refetchCards={async () => {
+              // Trigger a refetch of the cards data
+              try {
+                const cardsResponse = await fetch("/card", {
+                  headers: {
+                    Authorization: `Bearer ${process.env.NEXT_PUBLIC_TERMINAL_BEARER_TOKEN}`,
+                    "Content-Type": "application/json",
+                  },
+                });
+                if (cardsResponse.ok) {
+                  // This should trigger a re-render with new cards data
+                  console.log("Cards refreshed successfully");
+                }
+              } catch (error) {
+                console.error("Error refreshing cards:", error);
+              }
+            }}
+            onComplete={handleCheckoutFormComplete}
+            onCancel={() => setShowCheckoutForm(false)}
+          />
+        </div>
+      )}
+
       {/* Notification when item is added */}
       {lastAdded && (
         <div
@@ -250,7 +309,6 @@ export const CartDisplay = ({
       <style jsx>{`
         .cursor-blink {
           animation: blink 1s step-end infinite;
-          font-weight: bold;
         }
         @keyframes blink {
           0%,
@@ -261,19 +319,19 @@ export const CartDisplay = ({
             opacity: 0;
           }
         }
+        .animate-fadeOut {
+          animation: fadeOut 2s forwards;
+        }
         @keyframes fadeOut {
           0% {
             opacity: 1;
           }
-          70% {
+          80% {
             opacity: 1;
           }
           100% {
             opacity: 0;
           }
-        }
-        .animate-fadeOut {
-          animation: fadeOut 2s forwards;
         }
       `}</style>
     </div>
