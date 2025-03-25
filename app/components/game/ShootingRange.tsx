@@ -1,24 +1,15 @@
 "use client";
 
-import React from "react";
 import { MenuItem } from "@/app/lib/gameState";
+import { ProductSchema } from "@/endpoints";
+import { useFetch } from "@danstackme/apity";
 import { Cloud, Html, Sky } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { CoffeeMug } from "./CoffeeMug";
-import { useFetch } from "@danstackme/apity";
-import { useSpring, animated } from "@react-spring/three";
+import { z } from "zod";
 import { CartItem } from "./CartDisplay";
-
-// Placeholder data for development
-const PLACEHOLDER_MENU_ITEMS: MenuItem[] = [
-  { id: "1", name: "Espresso", price: 3.99 },
-  { id: "2", name: "Latte", price: 4.99 },
-  { id: "3", name: "Cappuccino", price: 4.49 },
-  { id: "4", name: "Mocha", price: 5.49 },
-  { id: "5", name: "Americano", price: 3.49 },
-];
+import { CoffeeMug } from "./CoffeeMug";
 
 // Audio system for game sounds
 const useAudio = () => {
@@ -197,20 +188,18 @@ export const ShootingRange = ({
   const [gameMode, setGameMode] = useState<
     "products" | "variants" | "quantity"
   >("products");
-  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<z.infer<
+    typeof ProductSchema
+  > | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<MenuItem | null>(null);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(
-    PLACEHOLDER_MENU_ITEMS
-  );
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   // Quantity options for the quantity selection step
   const [quantityOptions, setQuantityOptions] = useState<MenuItem[]>([
     { id: "back", name: "Go Back", price: 0 },
-    { id: "quantity_1", name: "Add 1", price: 0 },
     { id: "quantity_-1", name: "Remove 1", price: 0 },
+    { id: "quantity_1", name: "Add 1", price: 0 },
   ]);
-  const [lastHit, setLastHit] = useState<string | null>(null);
-  const [shotsFired, setShotsFired] = useState(0);
-  const [score, setScore] = useState(0);
+
   const [showControls, setShowControls] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isCartActive, setIsCartActive] = useState(false);
@@ -243,9 +232,6 @@ export const ShootingRange = ({
 
       if (productItems.length > 0) {
         setMenuItems(productItems);
-      } else {
-        // Fallback to placeholder if no valid products
-        setMenuItems(PLACEHOLDER_MENU_ITEMS);
       }
     }
   }, [coffeeList, gameMode]);
@@ -275,8 +261,6 @@ export const ShootingRange = ({
     const handleClick = (event: MouseEvent) => {
       // Skip shooting functionality if cart is active
       if (isCartActive) return;
-
-      setShotsFired((prev) => prev + 1);
 
       // Play gunshot sound
       playGunshot();
@@ -320,7 +304,6 @@ export const ShootingRange = ({
                     // Switch to variant mode
                     setSelectedProduct(hitProduct);
                     setGameMode("variants");
-                    setLastHit(`Selected: ${hitProduct.name}`);
                   }
                 } else if (gameMode === "variants") {
                   // In variant mode - register a hit on a variant
@@ -331,24 +314,15 @@ export const ShootingRange = ({
                     // Go back to product selection
                     setGameMode("products");
                     setSelectedProduct(null);
-                    setLastHit("Cancelled selection");
                     return;
                   }
-
-                  setLastHit(
-                    `Hit: ${selectedProduct?.name} - ${
-                      hitVariant.name
-                    } ($${hitVariant.price.toFixed(2)})`
-                  );
-                  setScore((prev) => prev + Math.round(hitVariant.price * 100));
 
                   // Store selected variant
                   setSelectedVariant(hitVariant);
 
                   // Check if the selected product is a subscription product
                   const isSubscription =
-                    selectedProduct?.subscription === "required" ||
-                    selectedProduct?.subscription === "allowed";
+                    selectedProduct?.subscription === "required";
 
                   if (isSubscription) {
                     // For subscription products, skip quantity selection and add directly to cart
@@ -403,7 +377,6 @@ export const ShootingRange = ({
                     // Go back to variant selection
                     setGameMode("variants");
                     setSelectedVariant(null);
-                    setLastHit("Back to variants");
                     return;
                   }
 
@@ -483,12 +456,6 @@ export const ShootingRange = ({
               break;
             }
           }
-
-          if (mugIndex === -1) {
-            setLastHit("Miss!");
-          }
-        } else {
-          setLastHit("Miss!");
         }
       }
     };

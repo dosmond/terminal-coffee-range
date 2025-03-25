@@ -95,7 +95,7 @@ export const GameScene = ({
 
       <Canvas shadows>
         <Suspense fallback={null}>
-          <PerspectiveCamera makeDefault position={[0, 3, 10]} />
+          <PerspectiveCamera makeDefault position={[0, 1, 10]} />
           <ambientLight intensity={0.5} />
           <directionalLight
             position={[10, 10, 5]}
